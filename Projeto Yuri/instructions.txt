@@ -1,7 +1,7 @@
 ----- PRÉ PROCESSAMENTO -------
 
 # Ver um único arquivo
-python Projeto Yuri/preprocessing.py--single "Projeto Yuri/dataset/1 real/1real‑01.jpg"
+python "Projeto Yuri/preprocessing.py" --single "Projeto Yuri/dataset/1 real/1real‑1.jpeg"
 
 # Percorrer todas as imagens, parando a cada uma
 python Projeto Yuri/preprocessing.py--dataset "Projeto Yuri/dataset"

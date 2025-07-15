@@ -6,9 +6,13 @@ import matplotlib.pyplot as plt
 # pre-processamento
 def preprocess(img_bgr):
     gray   = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
-    clahe  = cv2.createCLAHE(clipLimit=4.0, tileGridSize=(8, 8)).apply(gray)
-    blur   = cv2.GaussianBlur(clahe, (7, 7), 2)
-    edges  = cv2.Canny(blur, 150, 200)
+    clahe  = cv2.createCLAHE(4.0, (8, 8)).apply(gray)
+    blur   = cv2.GaussianBlur(clahe, (9, 9), 2)
+    media  = np.mean(blur)
+    edges  = cv2.Canny(blur, int(0.66 * media), int(1.33 * media))
+    kernel = np.ones((3, 3), np.uint8)
+    edges  = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, kernel, iterations=1)
+
     return gray, clahe, edges
 
 # exibir as etapas de preprocessamento
