@@ -5,15 +5,26 @@ import matplotlib.pyplot as plt
 
 # pre-processamento
 def preprocess(img_bgr):
-    gray   = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
-    clahe  = cv2.createCLAHE(4.0, (8, 8)).apply(gray)
-    blur   = cv2.GaussianBlur(clahe, (9, 9), 2)
-    media  = np.mean(blur)
-    edges  = cv2.Canny(blur, int(0.66 * media), int(1.33 * media))
-    kernel = np.ones((3, 3), np.uint8)
-    edges  = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, kernel, iterations=1)
+    gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+
+    # Suavizar mantendo bordas
+    blur = cv2.bilateralFilter(gray, d=9, sigmaColor=75, sigmaSpace=75)
+
+    # Aumentar contraste local (CLAHE mais suave)
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8)).apply(blur)
+
+    # Detecção de bordas adaptativa
+    v = np.median(clahe)
+    lower = int(max(0, 0.66 * v))
+    upper = int(min(255, 1.33 * v))
+    edges = cv2.Canny(clahe, lower, upper)
+
+    # Fechar buracos nas bordas
+    kernel = np.ones((5, 5), np.uint8)
+    edges = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, kernel)
 
     return gray, clahe, edges
+
 
 # exibir as etapas de preprocessamento
 def show_steps(img_path, pause=True):
@@ -68,7 +79,7 @@ if __name__ == '__main__':
     if args.single:               # visualizar apenas um arquivo
         show_steps(args.single, pause=True)
     else:                         # percorrer todo o dataset
-        for cls in ['1 real', '50 centavos']:
+        for cls in ['1real', '50centavos']:
             folder = os.path.join(args.dataset, cls)
             for img_path in glob.glob(os.path.join(folder, '*.*')):
                 print(f'Pré‑processando {img_path}')
