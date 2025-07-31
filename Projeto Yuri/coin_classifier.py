@@ -12,57 +12,88 @@ from skimage.feature import hog
 import matplotlib.pyplot as plt
 from joblib import dump, load
 
-def validate_preprocessing(img_path, display=False):
-
+def validate_preprocessing(img_path, display=True, save_steps=False, save_dir="steps"):
     try:
         img = cv2.imread(img_path)
         if img is None:
             raise ValueError(f"Erro ao carregar imagem: {img_path}")
-        
-        
+
+        output_img = img.copy()
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+
         
+        edges = cv2.Canny(blurred, 50, 150)
+
         
-        blur = cv2.GaussianBlur(gray, (5, 5), 0)
+        kernel = np.ones((5, 5), np.uint8)
+        closed = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, kernel)
+
         
-        
-        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-        clahe_img = clahe.apply(blur)
-        
-        
-        thresh = cv2.adaptiveThreshold(clahe_img, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
-                                     cv2.THRESH_BINARY_INV, 11, 2)
-        
-        
-        contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        
+        contours, _ = cv2.findContours(closed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
         if not contours:
-            raise ValueError("Nenhum contorno encontrado na imagem")
+            raise ValueError("Nenhum contorno encontrado")
+
         
         largest_contour = max(contours, key=cv2.contourArea)
-        (x, y, w, h) = cv2.boundingRect(largest_contour)
-        roi = img[y:y+h, x:x+w]
+
+       
+        (x, y), radius = cv2.minEnclosingCircle(largest_contour)
+        x, y, radius = int(x), int(y), int(radius)
+
         
-        if display:
-            plt.figure(figsize=(15, 5))
-            plt.subplot(141), plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB)), plt.title('Original')
-            plt.subplot(142), plt.imshow(thresh, cmap='gray'), plt.title('Threshold')
-            plt.subplot(143), plt.imshow(cv2.cvtColor(roi, cv2.COLOR_BGR2RGB)), plt.title('ROI')
+        x1 = max(x - radius, 0)
+        y1 = max(y - radius, 0)
+        x2 = min(x + radius, img.shape[1])
+        y2 = min(y + radius, img.shape[0])
+        roi = img[y1:y2, x1:x2]
+
+        if display or save_steps:
+            debug_img = output_img.copy()
+            cv2.circle(debug_img, (x, y), radius, (0, 255, 0), 2)     # verde
+            cv2.rectangle(debug_img, (x1, y1), (x2, y2), (0, 0, 255), 2)  # vermelho
+
+
             
-            
-            contour_img = img.copy()
-            cv2.drawContours(contour_img, [largest_contour], -1, (0, 255, 0), 2)
-            plt.subplot(144), plt.imshow(cv2.cvtColor(contour_img, cv2.COLOR_BGR2RGB)), plt.title('Contorno')
-            plt.show()
-        
+            fig, axs = plt.subplots(1, 5, figsize=(20, 4))
+            axs[0].imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+            axs[0].set_title('Original')
+            axs[1].imshow(gray, cmap='gray')
+            axs[1].set_title('Cinza')
+            axs[2].imshow(edges, cmap='gray')
+            axs[2].set_title('Canny')
+            axs[3].imshow(closed, cmap='gray')
+            axs[3].set_title('Fechamento')
+            axs[4].imshow(cv2.cvtColor(debug_img, cv2.COLOR_BGR2RGB))
+            axs[4].set_title('Contorno Detectado')
+
+            for ax in axs:
+                ax.axis('off')
+            plt.tight_layout()
+
+            if save_steps:
+                os.makedirs(save_dir, exist_ok=True)
+                filename = os.path.splitext(os.path.basename(img_path))[0]
+                save_path = os.path.join(save_dir, f"{filename}_steps.png")
+                plt.savefig(save_path)
+                print(f"Etapas salvas em: {save_path}")
+
+            if display:
+                plt.show()
+            else:
+                plt.close()
+
         return roi
-    
+
     except Exception as e:
         print(f"Erro no pré-processamento da imagem {img_path}: {str(e)}")
         return None
 
+
+
+
 def extract_features(roi, display=False, fixed_size=(64, 64)):
-    """Extrai features com tamanho consistente"""
     try:
         
         roi = cv2.resize(roi, fixed_size)
@@ -91,7 +122,6 @@ def extract_features(roi, display=False, fixed_size=(64, 64)):
         return None
 
 def load_dataset(dataset_path, sample_display=3):
-    """Carrega dataset com validação visual"""
     data = []
     labels = []
     class_names = ["1real", "50centavos", "25centavos"]
@@ -118,6 +148,7 @@ def load_dataset(dataset_path, sample_display=3):
                 continue
                 
             features = extract_features(roi, display=display)
+
             if features is None:
                 continue
                 
@@ -137,30 +168,23 @@ def load_dataset(dataset_path, sample_display=3):
     return np.array(data), np.array(labels)
 
 def train_and_evaluate(X, y):
-    """Treina modelos com validação cruzada"""
     try:
-        # Validação dos dados
+       
         if len(np.unique(y)) < 2:
             raise ValueError("Dataset precisa ter pelo menos 2 classes válidas")
         
         X_train, X_test, y_train, y_test = train_test_split(
             X, y, test_size=0.2, random_state=42, stratify=y)
         
-        # Normalização
+       
         scaler = StandardScaler()
         X_train = scaler.fit_transform(X_train)
         X_test = scaler.transform(X_test)
         
-        # Modelos
+        
         models = {
             "SVM": SVC(kernel='rbf', C=1.0, gamma='scale'),
             "Random Forest": RandomForestClassifier(n_estimators=100, random_state=42),
-            "MLP": MLPClassifier(hidden_layer_sizes=(64, 32), 
-                                activation='relu', 
-                                solver='adam', 
-                                max_iter=500, 
-                                random_state=42,
-                                early_stopping=True)
         }
         
         for name, model in models.items():
@@ -185,7 +209,6 @@ def train_and_evaluate(X, y):
 
 
 def save_models(svm_model, rf_model, mlp_model, scaler, save_dir="Projeto Yuri/models"):
-    """Salva os modelos e o scaler em arquivos .joblib"""
     try:
         os.makedirs(save_dir, exist_ok=True)
         dump(svm_model, os.path.join(save_dir, "svm_model.joblib"))
@@ -199,17 +222,19 @@ def save_models(svm_model, rf_model, mlp_model, scaler, save_dir="Projeto Yuri/m
 if __name__ == "__main__":
     try:
         dataset_path = "Projeto Yuri/dataset"
-        if not os.path.exists(dataset_path):
-            raise FileNotFoundError(f"Diretório do dataset não encontrado: {dataset_path}")
+        train_path = os.path.join(dataset_path, "train")  # <-- ADICIONADO
+
+        if not os.path.exists(train_path):
+            raise FileNotFoundError(f"Diretório de treino não encontrado: {train_path}")
         
-        print("=== Processando dataset ===")
-        X, y = load_dataset(dataset_path)
+        print("=== Processando dataset de treino ===")
+        X, y = load_dataset(train_path)
         
         print("\n=== Treinando modelos ===")
-        svm_model, rf_model, mlp_model, scaler = train_and_evaluate(X, y)
+        svm_model, rf_model, scaler = train_and_evaluate(X, y)
         
         if svm_model is not None:
-            save_models(svm_model, rf_model, mlp_model, scaler)  
+            save_models(svm_model, rf_model, scaler)  
             print("\nModelos salvos woohoooo!")
             
     except Exception as e:
