@@ -79,7 +79,7 @@ def extract_features(roi, fixed_size=(64, 64)):
         return None
 
 # caso da pilha Projeto Yuri/dataset/val/1real/WhatsApp Image 2025-07-22 at 16.51.13.jpeg
-img_path = "Projeto Yuri/dataset/val/1real/WhatsApp Image 2025-07-22 at 16.51.13.jpeg"  #Projeto Yuri/dataset/val/25centavos/WhatsApp Image 2025-07-22 at 17.02.54(1).jpeg
+img_path = "Projeto Yuri/dataset/val/1real/WhatsApp Image 2025-07-22 at 16.51.00.jpeg"  #Projeto Yuri/dataset/val/25centavos/WhatsApp Image 2025-07-22 at 17.02.54(1).jpeg
 model_dir = "Projeto Yuri/models"
 
 
